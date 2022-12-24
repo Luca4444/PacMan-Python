@@ -28,7 +28,6 @@ def scoreText(score, x, y, txt):
 
 class Game:
     def __init__(self):
-
         self.screen = screen
         self.pac = Pac()
         self.ghost1 = Ghost("Red")
@@ -38,13 +37,28 @@ class Game:
         self.score = 1
         self.board = Board()
         self.foodRectList = []
+        self.board.setBoard()
 
         for col in range(1, 24):
             for row in range(1, 19):
-                rect = pygame.rect.Rect(((col + 0.5) * 40, (row + 0.5) * 40, 10, 10))
+                rect = pygame.rect.Rect(((col + 0.5) * 40, (row + 0.5) * 40, 5, 5))
                 rect.centerx = (col + 0.5) * 40
                 rect.centery = (row + 0.5) * 40
                 self.foodRectList.append(rect)
+
+        exclude = np.array(
+            [[11, 9], [12, 9], [13, 9], [14, 9], [12, 10], [13, 10], [14, 10], [11, 10], [12, 8], [13, 8]])
+        exclude = exclude * 40
+
+        for ex in exclude:
+            col = pygame.rect.Rect((ex[0], ex[1], 40, 40)).collidelist(self.foodRectList)
+            if col != -1:
+                self.foodRectList.pop(col)
+
+        for boardPieceRect in self.board.piecesRect:
+            col = boardPieceRect.collidelist(self.foodRectList)
+            if col != -1:
+                self.foodRectList.pop(col)
 
     def main(self):
         clock = pygame.time.Clock()
@@ -59,23 +73,11 @@ class Game:
                     sys.exit()
 
             self.drawObjects()
-            # if len(self.snake.snakeList[1:]) > 1 and self.snake.snakeList[0][0].collidelist(
-            #         list(np.concatenate(self.snake.snakeList[1:]).flat)[::2]) != -1:
-            #     run = False
-            #     sys.exit()
-            #
-            # if self.snake.snakeList[0][0].x == -24 or self.snake.snakeList[0][0].x == 1008:
-            #     run = False
-            #     sys.exit()
-            #
-            # if self.snake.snakeList[0][0].y == -24 or self.snake.snakeList[0][0].y == 816:
-            #     run = False
-            #     sys.exit()
-
             clock.tick(8)
 
     def drawObjects(self):
-        scoreFunc = scoreText(self.score * 100, 20, 20, "")
+        print(len(self.foodRectList))
+        scoreFunc = scoreText(self.score * 100, 20, 25, "")
 
         self.screen.fill((0, 0, 0))
 
@@ -96,19 +98,18 @@ class Game:
         self.ghost3.drawGhost(self.screen)
         self.ghost4.drawGhost(self.screen)
 
+        for live in range(self.pac.lives):
+            rect = pygame.rect.Rect((900 + live*20, 10, 20, 20))
+            screen.blit(pygame.transform.scale(self.pac.pacOpenImage, (20, 20)), rect)
+
+
         self.pac.drawPac(self.screen)
 
-        # if self.pac.pacRect.collidelist([self.ghost1.ghostRect, self.ghost2.ghostRect, self.ghost3.ghostRect, self.ghost4.ghostRect]) != -1:
-        #     self.ghost1.eatMode = 40
-        #     self.ghost2.eatMode = 40
-        #     self.ghost3.eatMode = 40
-        #     self.ghost4.eatMode = 40
-
-        if self.ghost1.eatMode != 0 and self.ghost2.eatMode != 0 and self.ghost3.eatMode != 0 and self.ghost4.eatMode != 0:
-            collision = self.pac.pacRect.collidelist([self.ghost1.ghostRect, self.ghost2.ghostRect, self.ghost3.ghostRect, self.ghost4.ghostRect])
-            if collision !=1:
+        if self.ghost1.eatMode != 0 or self.ghost2.eatMode != 0 or self.ghost3.eatMode != 0 or self.ghost4.eatMode != 0:
+            collision = self.pac.pacRect.collidelist(
+                [self.ghost1.ghostRect, self.ghost2.ghostRect, self.ghost3.ghostRect, self.ghost4.ghostRect])
+            if collision != -1 and [self.ghost1, self.ghost2, self.ghost3, self.ghost4][collision].eatMode != 0:
                 [self.ghost1, self.ghost2, self.ghost3, self.ghost4][collision].eaten = True
-
 
         if self.pac.pacRect.collidelist(self.board.eatBallRects) != -1:
             self.board.eatBallRects.pop(self.pac.pacRect.collidelist(self.board.eatBallRects))
@@ -116,6 +117,10 @@ class Game:
             self.ghost2.eatMode = 40
             self.ghost3.eatMode = 40
             self.ghost4.eatMode = 40
+
+        col = self.pac.pacRect.collidelist([self.ghost1.ghostRect, self.ghost2.ghostRect, self.ghost3.ghostRect, self.ghost4.ghostRect])
+        if col != -1:
+            self.pac.lives -= 1
 
         if self.pac.pacRect.collidelist(self.foodRectList) != -1:
             self.score += 1
@@ -130,7 +135,7 @@ class Pac:
         self.speed = 20
         self.moveDir = [self.speed, 0]
         self.pacRect = pygame.rect.Rect((10 * 40, 13 * 40, 40, 40))
-        self.canMove = 1
+        self.canMove = -1
         self.spriteSheet = pygame.image.load('pacManNew.png').convert_alpha()
         rect = pygame.Rect((0, 0, 40, 40))
         self.pacOpenImage = pygame.Surface(rect.size).convert_alpha()
@@ -140,6 +145,7 @@ class Pac:
         self.pacClosedImage.blit(self.spriteSheet, (0, 0), rect)
         self.image = self.pacClosedImage
         self.checkDoor = 0
+        self.lives = 3
 
     def move(self, board):
 
@@ -162,19 +168,19 @@ class Pac:
         rectLeft = pygame.rect.Rect((self.pacRect.x - self.speed, self.pacRect.y, 40, 40))
         rectRight = pygame.rect.Rect((self.pacRect.x + self.speed, self.pacRect.y, 40, 40))
 
-        if rectUp.collidelist(board.piecesRect) != -1:
+        if rectUp.collidelist(board.piecesRect + board.ghostDoorRectList) != -1:
             allowMove[2] = False
 
-        if rectDown.collidelist(board.piecesRect) != -1:
+        if rectDown.collidelist(board.piecesRect + board.ghostDoorRectList) != -1:
             allowMove[3] = False
 
-        if rectLeft.collidelist(board.piecesRect) != -1:
+        if rectLeft.collidelist(board.piecesRect + board.ghostDoorRectList) != -1:
             allowMove[0] = False
 
-        if rectRight.collidelist(board.piecesRect) != -1:
+        if rectRight.collidelist(board.piecesRect + board.ghostDoorRectList) != -1:
             allowMove[1] = False
 
-        if keys[pygame.K_LEFT] and allowMove[0] and self.canMove == 1:  # Check boundaries
+        if keys[pygame.K_LEFT] and allowMove[0] and self.canMove == 1:
             self.moveDir = [-self.speed, 0]
 
         if keys[pygame.K_RIGHT] and allowMove[1] and self.canMove == 1:
@@ -228,6 +234,7 @@ class Board:
 
         self.spriteSheet = pygame.image.load('pacBlueMap.png').convert_alpha()
         self.eatBallSpriteSheet = pygame.image.load('eatBall.png').convert_alpha()
+        self.ghostDoorSpriteSheet = pygame.image.load('doorLine.png').convert_alpha()
         self.piecesRect = []
         self.piecesImages = []
         self.pieceTypes = []
@@ -235,6 +242,7 @@ class Board:
         self.doorsRectList = []
         self.eatBallPositions = []
         self.eatBallRects = []
+        self.ghostDoorRectList = []
 
         self.upDownPath = None
         self.leftRigthPath = None
@@ -263,9 +271,9 @@ class Board:
              [3, 15],
              [5, 8], [5, 9], [5, 15],
              [7, 6], [7, 7], [7, 8], [7, 9], [7, 13],
-             [9, 9], [9, 10], [9, 11],
+             [10, 9], [10, 10],
              [14, 15],
-             [16, 9], [16, 10], [16, 11], [16, 15],
+             [15, 9], [15, 10], [16, 15],
              [18, 4], [18, 5], [18, 6],
              [19, 10], [19, 11], [19, 12], [19, 13],
              [21, 4], [21, 5], [21, 6], [21, 10], [21, 14], [21, 15],
@@ -277,8 +285,7 @@ class Board:
              [18, 1], [19, 1], [20, 1], [21, 1], [22, 1],
              [4, 3], [5, 3], [6, 3], [7, 3], [8, 3], [12, 3], [13, 3], [14, 3], [15, 3],
              [6, 5], [12, 5], [13, 5], [14, 5], [15, 5],
-             [10, 8], [15, 8],
-             [6, 12], [10, 12], [11, 12], [12, 12], [13, 12], [14, 12], [15, 12],
+             [6, 12], [11, 11], [12, 11], [13, 11], [14, 11],
              [8, 14], [9, 14], [10, 14], [11, 14],
              [8, 16], [9, 16], [10, 16], [11, 16], [19, 16], [20, 16],
              [2, 18], [3, 18], [7, 18], [8, 18], [9, 18], [10, 18], [11, 18], [12, 18], [13, 18],
@@ -292,14 +299,18 @@ class Board:
              [18, 14], [7, 16], [18, 16], [6, 18]
              ],
             [[15, 1], [9, 3], [16, 3], [16, 5], [12, 14], [12, 16], [4, 18], [11, 8]],
-            [[1, 1], [11, 5], [9, 8]],
-            [[23, 1], [21, 3], [7, 5], [16, 8], [7, 12], ],
-            [[21, 7], [16, 12], [19, 14], [21, 16], [23, 18]],
-            [[9, 12], [7, 14], [1, 18]],
+            [[1, 1], [11, 5], [10, 8]],
+            [[23, 1], [21, 3], [7, 5], [15, 8], [7, 12]],
+            [[21, 7], [15, 11], [19, 14], [21, 16], [23, 18]],
+            [[10, 11], [7, 14], [1, 18]],
             [],
         ])
 
+        self.ghostDoorRectList = [pygame.rect.Rect((12 * 40, 8 * 40, 40, 8)),
+                                  pygame.rect.Rect((13 * 40, 8 * 40, 40, 8))]
 
+        for rect in self.ghostDoorRectList:
+            screen.blit(self.ghostDoorSpriteSheet, rect)
 
         rotate = [0, 90, 0, 180, 90, 270, 0, 270, 180, 90, 0]
 
@@ -333,8 +344,7 @@ class Board:
             if self.eatBallTimer > 2:
                 screen.blit(pygame.transform.scale(self.eatBallSpriteSheet, (40, 40)), rect)
             elif self.eatBallTimer <= 2:
-                screen.blit(pygame.transform.scale(pygame.surface.Surface((40,40)), (40, 40)), rect)
-
+                screen.blit(pygame.transform.scale(pygame.surface.Surface((40, 40)), (40, 40)), rect)
 
         door1Rect = pygame.rect.Rect((5 * 40, 19 * 40, 40, 40))
         door2Rect = pygame.rect.Rect((16 * 40, 0 * 40, 40, 40))
@@ -413,23 +423,34 @@ class Ghost:
     def __init__(self, color):
         self.speed = 20
         self.moveDir = [self.speed, 0]
-        x = 10
-        y = 10
-        if color == 'LightBlue':
-            x = 10
-            y = 9
-        elif color == 'Red':
-            x = 15
-            y = 9
-        elif color == 'Orange':
-            x = 10
-            y = 11
-        elif color == 'Pink':
-            x = 15
-            y = 11
+        self.initX = 10
+        self.initY = 10
+        self.otherGhostsInit = [pygame.rect.Rect((11 * 40, 9 * 40, 40, 40)),
+                                pygame.rect.Rect((14 * 40, 9 * 40, 40, 40)),
+                                pygame.rect.Rect((11 * 40, 10 * 40, 40, 40)),
+                                pygame.rect.Rect((14 * 40, 10 * 40, 40, 40))]
 
-        self.ghostRect = pygame.rect.Rect((x * 40, y * 40, 40, 40))
-        self.canMove = 1
+        if color == 'LightBlue':
+            self.initX = 11
+            self.initY = 9
+            self.otherGhostsInit.pop(0)
+        elif color == 'Red':
+            self.initX = 14
+            self.initY = 9
+            self.otherGhostsInit.pop(1)
+        elif color == 'Orange':
+            self.initX = 11
+            self.initY = 10
+            self.otherGhostsInit.pop(2)
+        elif color == 'Pink':
+            self.initX = 14
+            self.initY = 10
+            self.otherGhostsInit.pop(3)
+
+
+
+        self.ghostRect = pygame.rect.Rect((self.initX * 40, self.initY * 40, 40, 40))
+        self.canMove = -1
         self.img = 'ghostBody' + color + '.png'
         self.spriteSheet = pygame.image.load(self.img).convert_alpha()
         rect = pygame.Rect((0, 0, 40, 40))
@@ -450,20 +471,41 @@ class Ghost:
         self.eatMode = 0
         self.eatModeFinalTime = 12
         self.eaten = False
+        self.initDoor = []
 
     def move(self, board, pac, ghostRects):
+        if self.eatMode is 0:
+            if self.ghostRect.x % 20 is 5:
+                self.ghostRect.x -= 5
+            if self.ghostRect.y % 20 is 5:
+                self.ghostRect.y -= 5
 
-        if self.eatMode > self.eatModeFinalTime:
+            if self.ghostRect.x % 20 is 10:
+                self.ghostRect.x -= 10
+            if self.ghostRect.y % 20 is 10:
+                self.ghostRect.y -= 10
+
+            if self.ghostRect.x % 20 is 15:
+                self.ghostRect.x += 5
+            if self.ghostRect.y % 20 is 15:
+                self.ghostRect.y += 5
+
+        if self.eatMode > self.eatModeFinalTime and self.eaten is False:
+            self.speed = 15
             self.eatMode -= 1
             self.spriteSheet = pygame.image.load('ghostBodyBlue.png').convert_alpha()
-        elif 0 != self.eatMode <= self.eatModeFinalTime:
+        elif 0 != self.eatMode <= self.eatModeFinalTime and self.eaten is False:
             self.eatMode -= 1
+            self.speed = 15
             if self.eatMode % 2 == 0:
                 self.spriteSheet = pygame.image.load('ghostBodyWhite.png').convert_alpha()
             else:
                 self.spriteSheet = pygame.image.load('ghostBodyBlue.png').convert_alpha()
+        elif self.eaten is True:
+            self.spriteSheet = pygame.image.load('nothing.png').convert_alpha()
         else:
             self.spriteSheet = pygame.image.load(self.img).convert_alpha()
+            self.speed = 20
 
         rect = pygame.Rect((0, 0, 40, 40))
         self.ghost1Image = pygame.Surface(rect.size).convert_alpha()
@@ -500,17 +542,28 @@ class Ghost:
         rectLeft = pygame.rect.Rect((self.ghostRect.x - self.speed, self.ghostRect.y, 40, 40))
         rectRight = pygame.rect.Rect((self.ghostRect.x + self.speed, self.ghostRect.y, 40, 40))
 
-        if rectUp.collidelist(board.piecesRect + ghostRects) != -1:
-            allowMove[2] = False
+        if self.ghostRect.collidelist(
+                [pygame.rect.Rect((12 * 40, 7 * 40, 40, 30)), pygame.rect.Rect((13 * 40, 7 * 40, 40, 30))]) != -1:
+            self.initDoor = [pygame.rect.Rect((12 * 40, 8 * 40, 40, 40)), pygame.rect.Rect((13 * 40, 8 * 40, 40, 40))]
 
-        if rectDown.collidelist(board.piecesRect + ghostRects) != -1:
-            allowMove[3] = False
+        doors = []
 
-        if rectLeft.collidelist(board.piecesRect + ghostRects) != -1:
-            allowMove[0] = False
+        for door in board.doorsRectList:
+            doors.append(door[0])
+            doors.append(door[1])
 
-        if rectRight.collidelist(board.piecesRect + ghostRects) != -1:
-            allowMove[1] = False
+        if self.eaten is False:
+            if rectUp.collidelist(board.piecesRect + ghostRects + self.initDoor + self.otherGhostsInit + doors) != -1:
+                allowMove[2] = False
+
+            if rectDown.collidelist(board.piecesRect + ghostRects + self.initDoor + self.otherGhostsInit + doors) != -1:
+                allowMove[3] = False
+
+            if rectLeft.collidelist(board.piecesRect + ghostRects + self.initDoor + self.otherGhostsInit + doors) != -1:
+                allowMove[0] = False
+
+            if rectRight.collidelist(board.piecesRect + ghostRects + self.initDoor + self.otherGhostsInit + doors) != -1:
+                allowMove[1] = False
 
         if math.sqrt((pac.pacRect.x - self.ghostRect.x) ** 2 + (
                 pac.pacRect.y - self.ghostRect.y) ** 2) > 200 and self.changeDircTimer == 0 and self.eaten == False:
@@ -525,8 +578,8 @@ class Ghost:
                     options.pop(index)
 
             self.moveDir = random.choice(options)
-        elif self.changeDircTimer == 0:
-            if self.eatMode is 0:
+        elif self.changeDircTimer is 0:
+            if self.eatMode is 0 and self.eaten is False:
                 if pac.pacRect.x < self.ghostRect.x and allowMove[0] and self.canMove == 1:
                     self.moveDir = [-self.speed, 0]
 
@@ -539,17 +592,31 @@ class Ghost:
                 if pac.pacRect.y > self.ghostRect.y and allowMove[3] and self.canMove == 1:
                     self.moveDir = [0, self.speed]
             elif self.eaten is True:
-                if pac.pacRect.x < 11*40 and allowMove[0] and self.canMove == 1:
+                if self.initX * 40 < self.ghostRect.x and allowMove[0] and self.canMove == 1:
                     self.moveDir = [-self.speed, 0]
 
-                if pac.pacRect.x > 11*40 and allowMove[1] and self.canMove == 1:
+                if self.initX * 40 > self.ghostRect.x and allowMove[1] and self.canMove == 1:
                     self.moveDir = [self.speed, 0]
 
-                if pac.pacRect.y < 9*40 and allowMove[2] and self.canMove == 1:
+                if self.ghostRect.x - 15 < self.initX * 40 <= self.ghostRect.x + 15:
+                    self.ghostRect.x = self.initX * 40
+                    self.moveDir[0] = 0
+
+                if self.initY * 40 < self.ghostRect.y and allowMove[2] and self.canMove == 1:
                     self.moveDir = [0, -self.speed]
 
-                if pac.pacRect.y > 9*40 and allowMove[3] and self.canMove == 1:
+                if self.initY * 40 > self.ghostRect.y and allowMove[3] and self.canMove == 1:
                     self.moveDir = [0, self.speed]
+
+                if self.ghostRect.y - 15 < self.initY * 40 <= self.ghostRect.y + 15:
+                    self.ghostRect.y = self.initY * 40
+                    self.moveDir[1] = 0
+
+                if self.initY * 40 == self.ghostRect.y and self.initX * 40 == self.ghostRect.x:
+                    self.eatMode = 0
+                    self.eaten = False
+                    self.initDoor = []
+
             else:
                 if pac.pacRect.x > self.ghostRect.x and allowMove[0] and self.canMove == 1:
                     self.moveDir = [-self.speed, 0]
@@ -586,10 +653,11 @@ class Ghost:
                 self.checkDoor = 2
 
     def drawGhost(self, screen):
-        if self.eatMode > self.eatModeFinalTime:
+
+        if self.eatMode > self.eatModeFinalTime and self.eaten is False:
             rect = pygame.Rect((0, 0, 40, 40))
             self.image.blit(self.ghostEyesEatSpriteSheet, (0, 0), rect)
-        elif 0 != self.eatMode <= self.eatModeFinalTime:
+        elif 0 != self.eatMode <= self.eatModeFinalTime and self.eaten is False:
             if self.eatMode % 2 == 0:
                 rect = pygame.Rect((0, 40, 40, 40))
                 self.image.blit(self.ghostEyesEatSpriteSheet, (0, 0), rect)
