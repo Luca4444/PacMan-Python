@@ -15,10 +15,10 @@ red = (255, 0, 0)
 green = (244, 173, 167)
 
 
-def scoreText(score, x, y, txt):
-    white = (255, 255, 255)
+def scoreText(score, x, y, txt, fontSize=28, color=(255, 255, 255)):
+    white = color
 
-    font = pygame.font.Font('Minecraft.ttf', 28)
+    font = pygame.font.Font('Minecraft.ttf', fontSize)
     text = font.render(txt + str(score), True, white)
     textRect = text.get_rect()
     textRect.center = (x, y)
@@ -38,6 +38,7 @@ class Game:
         self.board = Board()
         self.foodRectList = []
         self.board.setBoard()
+        self.run = True
 
         for col in range(1, 24):
             for row in range(1, 19):
@@ -63,16 +64,16 @@ class Game:
     def main(self):
         clock = pygame.time.Clock()
         frametime = clock.tick()
-        self.score = 1
-
+        self.score = 0
         run = True
-        while run == True:
+
+        while run:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     run = False
                     sys.exit()
 
-            self.drawObjects()
+            run = self.drawObjects()
             clock.tick(8)
 
     def drawObjects(self):
@@ -99,9 +100,8 @@ class Game:
         self.ghost4.drawGhost(self.screen)
 
         for live in range(self.pac.lives):
-            rect = pygame.rect.Rect((900 + live*20, 10, 20, 20))
+            rect = pygame.rect.Rect((900 + live * 20, 10, 20, 20))
             screen.blit(pygame.transform.scale(self.pac.pacOpenImage, (20, 20)), rect)
-
 
         self.pac.drawPac(self.screen)
 
@@ -117,10 +117,62 @@ class Game:
             self.ghost2.eatMode = 40
             self.ghost3.eatMode = 40
             self.ghost4.eatMode = 40
-
-        col = self.pac.pacRect.collidelist([self.ghost1.ghostRect, self.ghost2.ghostRect, self.ghost3.ghostRect, self.ghost4.ghostRect])
-        if col != -1:
+        ghostlist = [self.ghost1.ghostRect, self.ghost2.ghostRect, self.ghost3.ghostRect, self.ghost4.ghostRect]
+        col = self.pac.pacRect.collidelist(ghostlist)
+        if col != -1 and [self.ghost1, self.ghost2, self.ghost3, self.ghost4][col].eatMode == 0:
             self.pac.lives -= 1
+            if self.pac.lives == 0:
+                self.screen.fill((0, 0, 0))
+                self.board.setBoard()
+
+                pygame.display.update()
+                for i in range(100):
+                    scoreFunc = scoreText('', 370, 520, "GAME OVER", fontSize=50, color=(255, 0, 0))
+                    screen.blit(scoreFunc[0], scoreFunc[1])
+                    pygame.display.update()
+                return False
+
+            self.ghost1.ghostRect.x = 14 * 40
+            self.ghost1.ghostRect.y = 9 * 40
+            self.ghost2.ghostRect.x = 11 * 40
+            self.ghost2.ghostRect.y = 10 * 40
+            self.ghost3.ghostRect.x = 14 * 40
+            self.ghost3.ghostRect.y = 10 * 40
+            self.ghost4.ghostRect.x = 11 * 40
+            self.ghost4.ghostRect.y = 9 * 40
+            self.ghost1.initDoor = []
+            self.ghost2.initDoor = []
+            self.ghost3.initDoor = []
+            self.ghost4.initDoor = []
+
+            self.screen.fill((0, 0, 0))
+            self.board.setBoard()
+
+            pygame.display.update()
+
+            for i in range(100):
+                img = self.pac.imageDeath[math.floor(i / 10)]
+                if self.pac.moveDir == [-self.pac.speed, 0]:
+                    img = pygame.transform.rotate(img, 180)
+
+                if self.pac.moveDir == [0, -self.pac.speed]:
+                    img = pygame.transform.rotate(img, 90)
+
+                if self.pac.moveDir == [0, self.pac.speed]:
+                    img = pygame.transform.rotate(img, 270)
+
+                pygame.draw.rect(screen, (0, 0, 0), self.pac.pacRect)
+                screen.blit(img, self.pac.pacRect)
+                print(math.floor(i / 10))
+                pygame.display.update()
+
+            for i in range(100):
+                scoreFunc = scoreText('', 430, 520, "READY!", fontSize=50, color=(248, 251, 57))
+                screen.blit(scoreFunc[0], scoreFunc[1])
+                pygame.display.update()
+
+            self.pac.pacRect.x = 10 * 40
+            self.pac.pacRect.y = 13 * 40
 
         if self.pac.pacRect.collidelist(self.foodRectList) != -1:
             self.score += 1
@@ -128,6 +180,7 @@ class Game:
 
         self.screen.blit(scoreFunc[0], scoreFunc[1])
         pygame.display.update()
+        return True
 
 
 class Pac:
@@ -137,6 +190,7 @@ class Pac:
         self.pacRect = pygame.rect.Rect((10 * 40, 13 * 40, 40, 40))
         self.canMove = -1
         self.spriteSheet = pygame.image.load('pacManNew.png').convert_alpha()
+        self.pacDeathSpriteSheet = pygame.image.load('pacManDeath.png').convert_alpha()
         rect = pygame.Rect((0, 0, 40, 40))
         self.pacOpenImage = pygame.Surface(rect.size).convert_alpha()
         self.pacOpenImage.blit(self.spriteSheet, (0, 0), rect)
@@ -146,6 +200,20 @@ class Pac:
         self.image = self.pacClosedImage
         self.checkDoor = 0
         self.lives = 3
+
+        self.imageDeath = []
+
+        for col in range(3):
+            for row in range(3):
+                rect = pygame.Rect((40 * row, 40 * col, 40, 40))
+                image = pygame.Surface(rect.size).convert_alpha()
+                image.blit(self.pacDeathSpriteSheet, (0, 0), rect)
+                self.imageDeath.append(image)
+
+        rect = pygame.Rect((0, 40 * 4, 40, 40))
+        image = pygame.Surface(rect.size).convert_alpha()
+        image.blit(self.pacDeathSpriteSheet, (0, 0), rect)
+        self.imageDeath.append(image)
 
     def move(self, board):
 
@@ -447,8 +515,6 @@ class Ghost:
             self.initY = 10
             self.otherGhostsInit.pop(3)
 
-
-
         self.ghostRect = pygame.rect.Rect((self.initX * 40, self.initY * 40, 40, 40))
         self.canMove = -1
         self.img = 'ghostBody' + color + '.png'
@@ -562,7 +628,8 @@ class Ghost:
             if rectLeft.collidelist(board.piecesRect + ghostRects + self.initDoor + self.otherGhostsInit + doors) != -1:
                 allowMove[0] = False
 
-            if rectRight.collidelist(board.piecesRect + ghostRects + self.initDoor + self.otherGhostsInit + doors) != -1:
+            if rectRight.collidelist(
+                    board.piecesRect + ghostRects + self.initDoor + self.otherGhostsInit + doors) != -1:
                 allowMove[1] = False
 
         if math.sqrt((pac.pacRect.x - self.ghostRect.x) ** 2 + (
@@ -684,6 +751,53 @@ class Ghost:
         screen.blit(self.image, self.ghostRect)
 
 
-game1 = Game()
+def main():
+    clock = pygame.time.Clock()
+    frametime = clock.tick()
+    run = True
+    blink = 0
 
-game1.main()
+    imageDeath = []
+    pacDeathSpriteSheet = pygame.image.load('pacManDeath.png').convert_alpha()
+
+    for col in range(3):
+        for row in range(3):
+            rect = pygame.Rect((40 * row, 40 * col, 40, 40))
+            image = pygame.Surface(rect.size).convert_alpha()
+            image.blit(pacDeathSpriteSheet, (0, 0), rect)
+            imageDeath.append(image)
+
+    while run:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+                sys.exit()
+
+        keys = pygame.key.get_pressed()
+
+        if keys[pygame.K_RETURN]:
+            game1 = Game()
+
+            game1.main()
+        blink += 1
+        if blink == 9:
+            blink = 0
+
+
+        screen.fill((0, 0, 0))
+        scoreFunc = scoreText('', 110, 300, "Pa  Man", fontSize=200, color=(248, 251, 57))
+        screen.blit(scoreFunc[0], scoreFunc[1])
+        if blink < 3:
+            scoreFunc = scoreText('', 210, 500, "Press ENTER to start!", fontSize=50, color=(255, 255, 255))
+            screen.blit(scoreFunc[0], scoreFunc[1])
+
+        rect = pygame.rect.Rect((375, 240, 100, 100))
+        screen.blit(pygame.transform.scale(imageDeath[0], (120,120)), rect)
+        rect = pygame.rect.Rect((450, 600, 100, 100))
+        screen.blit(pygame.transform.scale(imageDeath[blink], (100,100)), rect)
+        pygame.display.update()
+
+        clock.tick(8)
+
+
+main()
