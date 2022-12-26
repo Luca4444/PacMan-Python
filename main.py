@@ -1,3 +1,5 @@
+import json
+
 import pygame
 import numpy as np
 import sys, pygame
@@ -17,7 +19,6 @@ green = (244, 173, 167)
 
 def scoreText(score, x, y, txt, fontSize=28, color=(255, 255, 255)):
     white = color
-
     font = pygame.font.Font('Minecraft.ttf', fontSize)
     text = font.render(txt + str(score), True, white)
     textRect = text.get_rect()
@@ -39,6 +40,7 @@ class Game:
         self.foodRectList = []
         self.board.setBoard()
         self.run = True
+        self.highscore = None
 
         for col in range(1, 24):
             for row in range(1, 19):
@@ -61,6 +63,13 @@ class Game:
             if col != -1:
                 self.foodRectList.pop(col)
 
+        f = open('data.json')
+
+        data = json.load(f)
+
+        for k, v in data.items():
+            self.highscore = v
+
     def main(self):
         clock = pygame.time.Clock()
         frametime = clock.tick()
@@ -77,8 +86,17 @@ class Game:
             clock.tick(8)
 
     def drawObjects(self):
-        print(len(self.foodRectList))
         scoreFunc = scoreText(self.score * 100, 20, 25, "")
+        if self.score*100 > self.highscore:
+            self.highscore = self.score*100
+            newHighScore = {"HIGHSCORE": self.score*100}
+            jsonString = json.dumps(newHighScore)
+            f = open('data.json', 'w')
+            f.write(jsonString)
+            f.close()
+
+
+        highScore = scoreText(self.highscore, 400, 25, "HIGHSCORE: ")
 
         self.screen.fill((0, 0, 0))
 
@@ -98,6 +116,8 @@ class Game:
         self.ghost2.drawGhost(self.screen)
         self.ghost3.drawGhost(self.screen)
         self.ghost4.drawGhost(self.screen)
+
+
 
         for live in range(self.pac.lives):
             rect = pygame.rect.Rect((900 + live * 20, 10, 20, 20))
@@ -163,7 +183,6 @@ class Game:
 
                 pygame.draw.rect(screen, (0, 0, 0), self.pac.pacRect)
                 screen.blit(img, self.pac.pacRect)
-                print(math.floor(i / 10))
                 pygame.display.update()
 
             for i in range(100):
@@ -179,6 +198,7 @@ class Game:
             self.foodRectList.pop(self.pac.pacRect.collidelist(self.foodRectList))
 
         self.screen.blit(scoreFunc[0], scoreFunc[1])
+        self.screen.blit(highScore[0], highScore[1])
         pygame.display.update()
         return True
 
@@ -372,7 +392,7 @@ class Board:
             [[21, 7], [15, 11], [19, 14], [21, 16], [23, 18]],
             [[10, 11], [7, 14], [1, 18]],
             [],
-        ])
+        ], dtype=object)
 
         self.ghostDoorRectList = [pygame.rect.Rect((12 * 40, 8 * 40, 40, 8)),
                                   pygame.rect.Rect((13 * 40, 8 * 40, 40, 8))]
@@ -540,20 +560,20 @@ class Ghost:
         self.initDoor = []
 
     def move(self, board, pac, ghostRects):
-        if self.eatMode is 0:
-            if self.ghostRect.x % 20 is 5:
+        if self.eatMode == 0:
+            if self.ghostRect.x % 20 == 5:
                 self.ghostRect.x -= 5
-            if self.ghostRect.y % 20 is 5:
+            if self.ghostRect.y % 20 == 5:
                 self.ghostRect.y -= 5
 
-            if self.ghostRect.x % 20 is 10:
+            if self.ghostRect.x % 20 == 10:
                 self.ghostRect.x -= 10
-            if self.ghostRect.y % 20 is 10:
+            if self.ghostRect.y % 20 == 10:
                 self.ghostRect.y -= 10
 
-            if self.ghostRect.x % 20 is 15:
+            if self.ghostRect.x % 20 == 15:
                 self.ghostRect.x += 5
-            if self.ghostRect.y % 20 is 15:
+            if self.ghostRect.y % 20 == 15:
                 self.ghostRect.y += 5
 
         if self.eatMode > self.eatModeFinalTime and self.eaten is False:
@@ -645,8 +665,8 @@ class Ghost:
                     options.pop(index)
 
             self.moveDir = random.choice(options)
-        elif self.changeDircTimer is 0:
-            if self.eatMode is 0 and self.eaten is False:
+        elif self.changeDircTimer == 0:
+            if self.eatMode == 0 and self.eaten is False:
                 if pac.pacRect.x < self.ghostRect.x and allowMove[0] and self.canMove == 1:
                     self.moveDir = [-self.speed, 0]
 
